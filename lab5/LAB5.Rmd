@@ -1,0 +1,156 @@
+---
+title: "LAB5"
+author: "Lubin"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+#Дисперсионный анализ
+
+Загрузим данные
+
+```{r}
+data <- read.csv("data/diet.csv", row.names=1)
+summary(data)
+```
+
+Проведем некоторые преобразования над таблицей
+
+```{r}
+colnames(data) <- c("gender", "age", "height", "initial.weight", 
+                    "diet.type", "final.weight")
+data$diet.type <- factor(c("A", "B", "C")[data$diet.type])
+data$weight.loss = data$initial.weight - data$final.weight
+summary(data)
+```
+
+*Удаление выбросов*
+
+Сейчас нужно проверить данные в колонке "weight.loss" на наличие выбросов. Извлечем потенциальные выбросы на основе критерия IQR (межквартильного размаха), используя функцию "boxplot.stats()".
+
+```{r}
+boxplot.stats(data$weight.loss)$out
+```
+
+Если рассматривать данные целиком, то выбросов нет. Разделим данные на 3 группы по типу диеты и проверим на наличие выбросов каждую из них.
+
+```{r}
+data.Adiet <- subset(data, diet.type == "A")
+data.Bdiet <- subset(data, diet.type == "B")
+data.Cdiet <- subset(data, diet.type == "C")
+
+out.A <- boxplot.stats(data.Adiet$weight.loss)$out
+out.B <- boxplot.stats(data.Bdiet$weight.loss)$out
+out.C <- boxplot.stats(data.Cdiet$weight.loss)$out
+
+out.A
+out.B
+out.C
+```
+
+В итоге, потенциальные выбросы были обнаружены только в группе "А". Избавимся от них.
+
+```{r}
+data.new <- subset(data, weight.loss != 8.5 & weight.loss != 9.0)
+boxplot.stats(subset(data.new, diet.type == "A")$weight.loss)$out
+```
+*Тесты и построение графиков*
+
+Далее проведем все тесты, показанные в примере, и сравним результаты с выбросами и без.
+
+*Диаграмма размаха*
+```{r}
+# С выбросами
+boxplot(
+  data=data,
+  weight.loss~diet.type,
+  col="light gray",
+  ylab="Weight loss (kg)",
+  xlab="Diet type"
+)
+abline(h=0, col="green")
+
+# Без выбросов
+boxplot(
+  data=data.new,
+  weight.loss~diet.type,
+  col="light gray",
+  ylab="Weight loss (kg)",
+  xlab="Diet type"
+)
+abline(h=0, col="green")
+```
+В случае без выбросов средняя потеря веса у людей, которые сидели на диете "А", ниже чем в случае с выбросами. Также уменьшился верхний и нижний квантиль.
+
+*График групповых средних*
+
+```{r}
+library(gplots)
+
+# С выбросами
+plotmeans(data=data, weight.loss~diet.type)
+# Рассчет среднеквадратического отклонения для каждой группы
+aggregate(data$weight.loss, by=list(data$diet.type), FUN=sd)
+
+# Без выбросов
+plotmeans(data=data.new, weight.loss~diet.type)
+# Рассчет среднеквадратического отклонения для каждой группы
+aggregate(data.new$weight.loss, by=list(data.new$diet.type), FUN=sd)
+```
+В случае без выбросов среднеквадратическое отклонение потери веса у людей, которые сидели на диете "А", ниже чем в случае с выбросами.
+
+*Тест на межгрупповые различия*
+Для подгонки ANOVA модели используем функцию aov, частный случай линейной модели lm.
+
+```{r}
+# С выбросами
+fit <- aov(data=data, weight.loss ~ diet.type)
+summary(fit)
+
+cat("\n\n")
+
+# Без выбросов
+fit.new <- aov(data=data.new, weight.loss ~ diet.type)
+summary(fit.new)
+```
+В случае без выбросов значение p-value меньше чем в случае с выбросами. Несмотря на это, в обоих случаях результат является статистически значимым. Это указывает на то, что по крайней мере одна группа отличается от других.
+
+*Попарные различия между средними значениями для всех групп*
+
+```{r}
+# C выбросами
+TukeyHSD(fit)
+
+cat("\n\n")
+
+# Без выбросов
+TukeyHSD(fit.new)
+```
+В случае без выбросов разница между группами A и B, A и С выше чем в случае с выбросами.
+
+```{r}
+library(multcomp)
+
+# C выбросами
+par(mar=c(5,4,6,2))
+tuk <- glht(fit, linfct=mcp(diet.type="Tukey"))
+plot(cld(tuk, level=.05),col="lightgrey")
+
+# Без выбросов
+par(mar=c(5,4,6,2))
+tuk.new <- glht(fit.new, linfct=mcp(diet.type="Tukey"))
+plot(cld(tuk.new, level=.05),col="lightgrey")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
